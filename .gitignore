@@ -1,0 +1,34 @@
+# Окружение и секреты (НИКОГДА не пушить в GitHub!)
+.env
+.env.local
+*.env
+
+# Виртуальные окружения Python
+.venv/
+venv/
+ENV/
+env/
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Загруженные файлы (накладные)
+uploads/*
+!uploads/.gitkeep
+backups/
+
+# Системные файлы macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE и редакторы
+.idea/
+.vscode/
+*.swp
+*.swo
+

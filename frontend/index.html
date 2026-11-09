@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full bg-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>МойСклад CRM — Панель оптовых продаж и логистики</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    /* Кастомный скроллбар для колонок канбана */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .kanban-col-dragover {
+      background-color: #e2e8f0 !important;
+      outline: 2px dashed #475569;
+      outline-offset: -4px;
+    }
+    .card-dragging {
+      opacity: 0.45;
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col text-slate-900 antialiased selection:bg-slate-900 selection:text-white">
+
+  <!-- ВЕРХНЯЯ НАВИГАЦИОННАЯ ПАНЕЛЬ -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Логотип и переключатель вкладок -->
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded bg-amber-400 text-slate-950 font-bold flex items-center justify-center font-mono text-sm tracking-tighter">
+            МС
+          </div>
+          <div>
+            <span class="font-bold tracking-tight text-base">МойСклад</span>
+            <span class="hidden sm:inline-block ml-1.5 text-[11px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+              B2B HoReCa
+            </span>
+          </div>
+        </div>
+
+        <!-- Главные вкладки -->
+        <nav class="flex items-center bg-slate-800/90 p-1 rounded-lg border border-slate-700/80">
+          <button
+            id="tab-btn-kanban"
+            onclick="switchTab('kanban')"
+            class="px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition flex items-center gap-2 bg-white text-slate-900 shadow-sm"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+            </svg>
+            Канбан заказов
+            <span id="nav-orders-count" class="font-mono text-xs px-1.5 py-0.2 rounded bg-slate-200 text-slate-800">0</span>
+          </button>
+
+          <button
+            id="tab-btn-inventory"
+            onclick="switchTab('inventory')"
+            class="px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition flex items-center gap-2 text-slate-300 hover:text-white"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+            Остатки на складе
+            <span id="nav-low-stock-badge" class="hidden font-mono text-[11px] px-1.5 py-0.2 rounded bg-rose-500 text-white">!</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Статус API + Быстрые действия -->
+      <div class="flex items-center gap-3">
+        <!-- Переключатель режима API / Demo -->
+        <div class="hidden md:flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-md border border-slate-700 text-xs">
+          <span id="api-status-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span id="api-status-label" class="text-slate-300 font-medium">Режим:</span>
+          <button
+            id="toggle-mode-btn"
+            onclick="toggleDataSourceMode()"
+            class="font-mono font-semibold text-amber-400 hover:underline"
+            title="Переключить между реальным FastAPI бэкендом и локальными демо-данными"
+          >
+            AUTO
+          </button>
+        </div>
+
+        <button
+          onclick="refreshAllData()"
+          class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+          title="Обновить данные (R)"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+
+        <button
+          onclick="openCreateOrderModal()"
+          class="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-950 font-bold text-xs sm:text-sm transition flex items-center gap-2 shadow-sm"
+        >
+          <svg class="w-4 h-4 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          <span>Новый заказ</span>
+          <kbd class="hidden lg:inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono bg-amber-500/40 text-slate-950 rounded">N</kbd>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- СВОДНАЯ СТРОКА МЕТРИК (KPI BAR) -->
+  <section class="bg-white border-b border-slate-200">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-2.5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+      <div class="flex items-center justify-between sm:justify-start sm:gap-3 border-r border-slate-100 pr-4">
+        <span class="text-slate-500 font-medium">Активных заказов:</span>
+        <span id="kpi-active-orders" class="font-mono font-bold text-sm text-slate-900">0</span>
+      </div>
+      <div class="flex items-center justify-between sm:justify-start sm:gap-3 sm:border-r border-slate-100 pr-4">
+        <span class="text-slate-500 font-medium">Сумма в работе:</span>
+        <span id="kpi-active-revenue" class="font-mono font-bold text-sm text-slate-900">0 ₸</span>
+      </div>
+      <div class="flex items-center justify-between sm:justify-start sm:gap-3 border-r border-slate-100 pr-4">
+        <span class="text-slate-500 font-medium">Мало на складе (&lt;10 кор.):</span>
+        <span id="kpi-low-stock" class="font-mono font-bold text-sm text-amber-600">0 поз.</span>
+      </div>
+      <div class="flex items-center justify-between sm:justify-start sm:gap-3">
+        <span class="text-slate-500 font-medium">Дефицит (0 в наличии):</span>
+        <span id="kpi-zero-stock" class="font-mono font-bold text-sm text-rose-600">0 поз.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ОСНОВНОЙ КОНТЕНТ -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-5 flex flex-col min-h-0">
+
+    <!-- ==================================================================== -->
+    <!-- ВКЛАДКА 1: КАНБАН-ДОСКА ЗАКАЗОВ                                      -->
+    <!-- ==================================================================== -->
+    <section id="view-kanban" class="flex-1 flex flex-col min-h-0">
+      <!-- Панель фильтрации канбана -->
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2 flex-1 max-w-md">
+          <div class="relative w-full">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input
+              id="kanban-search"
+              type="text"
+              oninput="renderKanban()"
+              placeholder="Поиск заказа по №, клиенту, адресу или товару..."
+              class="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 text-xs text-slate-500">
+          <span class="hidden sm:inline-flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+            Перетащите карточку мышью (Drag &amp; Drop) или используйте кнопки смены статуса
+          </span>
+        </div>
+      </div>
+
+      <!-- Сетка из 4 колонок канбана -->
+      <div class="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 min-h-0">
+        
+        <!-- Колонка: НОВЫЙ (new) -->
+        <div
+          class="bg-slate-200/75 rounded-xl border border-slate-300/90 flex flex-col max-h-[calc(100vh-215px)]"
+          data-status="new"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event, 'new')"
+        >
+          <div class="p-3 border-b border-slate-300/80 flex items-center justify-between bg-slate-200/60 rounded-t-xl">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-sky-600"></span>
+              <h2 class="font-bold text-xs uppercase tracking-wider text-slate-800">Новый</h2>
+              <span class="text-[11px] font-mono text-slate-500">(Резерв создан)</span>
+            </div>
+            <span id="col-count-new" class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-white text-slate-800 border border-slate-300">0</span>
+          </div>
+          <div id="col-body-new" class="p-2.5 space-y-2.5 overflow-y-auto flex-1"></div>
+        </div>
+
+        <!-- Колонка: НА СБОРКЕ (assembling) -->
+        <div
+          class="bg-slate-200/75 rounded-xl border border-slate-300/90 flex flex-col max-h-[calc(100vh-215px)]"
+          data-status="assembling"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event, 'assembling')"
+        >
+          <div class="p-3 border-b border-slate-300/80 flex items-center justify-between bg-slate-200/60 rounded-t-xl">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <h2 class="font-bold text-xs uppercase tracking-wider text-slate-800">На сборке</h2>
+              <span class="text-[11px] font-mono text-slate-500">(Склад)</span>
+            </div>
+            <span id="col-count-assembling" class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-white text-slate-800 border border-slate-300">0</span>
+          </div>
+          <div id="col-body-assembling" class="p-2.5 space-y-2.5 overflow-y-auto flex-1"></div>
+        </div>
+
+        <!-- Колонка: В ПУТИ (in_transit) -->
+        <div
+          class="bg-slate-200/75 rounded-xl border border-slate-300/90 flex flex-col max-h-[calc(100vh-215px)]"
+          data-status="in_transit"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event, 'in_transit')"
+        >
+          <div class="p-3 border-b border-slate-300/80 flex items-center justify-between bg-slate-200/60 rounded-t-xl">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+              <h2 class="font-bold text-xs uppercase tracking-wider text-slate-800">В пути</h2>
+              <span class="text-[11px] font-mono text-slate-500">(У водителя)</span>
+            </div>
+            <span id="col-count-in_transit" class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-white text-slate-800 border border-slate-300">0</span>
+          </div>
+          <div id="col-body-in_transit" class="p-2.5 space-y-2.5 overflow-y-auto flex-1"></div>
+        </div>
+
+        <!-- Колонка: ДОСТАВЛЕН (delivered) -->
+        <div
+          class="bg-slate-200/75 rounded-xl border border-slate-300/90 flex flex-col max-h-[calc(100vh-215px)]"
+          data-status="delivered"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event, 'delivered')"
+        >
+          <div class="p-3 border-b border-slate-300/80 flex items-center justify-between bg-slate-200/60 rounded-t-xl">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+              <h2 class="font-bold text-xs uppercase tracking-wider text-slate-800">Доставлен</h2>
+              <span class="text-[11px] font-mono text-slate-500">(Списан)</span>
+            </div>
+            <span id="col-count-delivered" class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-white text-slate-800 border border-slate-300">0</span>
+          </div>
+          <div id="col-body-delivered" class="p-2.5 space-y-2.5 overflow-y-auto flex-1"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- ВКЛАДКА 2: ТАБЛИЦА ОСТАТКОВ ТОВАРОВ                                  -->
+    <!-- ==================================================================== -->
+    <section id="view-inventory" class="hidden flex-1 flex flex-col min-h-0">
+      <!-- Панель поиска и легенда подсветки -->
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex items-center gap-3 flex-1 min-w-[260px] max-w-xl">
+          <div class="relative w-full">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input
+              id="inventory-search"
+              type="text"
+              oninput="renderInventoryTable()"
+              placeholder="Быстрый фильтр по артикулу (SKU) или названию товара..."
+              class="w-full pl-10 pr-8 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+            />
+          </div>
+
+          <select
+            id="inventory-stock-filter"
+            onchange="renderInventoryTable()"
+            class="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900"
+          >
+            <option value="all">Все позиции</option>
+            <option value="critical">Дефицит (0 в наличии)</option>
+            <option value="low">Мало (&lt; 10 коробок)</option>
+            <option value="ok">Достаточно (&ge; 10)</option>
+          </select>
+        </div>
+
+        <!-- Легенда цветовой индикации -->
+        <div class="flex flex-wrap items-center gap-4 text-xs font-medium">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-100 text-rose-900 border border-rose-300">
+            <span class="w-2 h-2 rounded-full bg-rose-600"></span>
+            Доступно = 0 (Стоп-продажа)
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+            Доступно &lt; 10 кор. (Критично мало)
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
+            <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
+            В наличии (&ge; 10)
+          </span>
+        </div>
+      </div>
+
+      <!-- Таблица остатков -->
+      <div class="bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden flex-1 flex flex-col">
+        <div class="overflow-x-auto flex-1">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-900 text-slate-200 text-[11px] font-mono uppercase tracking-wider">
+                <th class="py-3 px-4">Артикул (SKU)</th>
+                <th class="py-3 px-4">Наименование расходника</th>
+                <th class="py-3 px-3 text-center">Ед. изм.</th>
+                <th class="py-3 px-4 text-right">Оптовая цена</th>
+                <th class="py-3 px-4 text-right">Физ. склад (Stock)</th>
+                <th class="py-3 px-4 text-right">В резерве (Reserved)</th>
+                <th class="py-3 px-4 text-right">Доступно к продаже</th>
+                <th class="py-3 px-4 text-center">Статус запаса</th>
+                <th class="py-3 px-4 text-right">Действие</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-tbody" class="divide-y divide-slate-200 text-sm"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ====================================================================== -->
+  <!-- МОДАЛЬНОЕ ОКНО: СОЗДАНИЕ НОВОГО ЗАКАЗА                                 -->
+  <!-- ====================================================================== -->
+  <div
+    id="modal-create-order"
+    class="fixed inset-0 z-50 hidden bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center p-4 overflow-y-auto"
+  >
+    <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-300 overflow-hidden my-8">
+      <!-- Шапка модалки -->
+      <div class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold tracking-tight">Оформление оптового заказа (с мгновенным резервом)</h3>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Проверка свободного остатка (<code class="font-mono text-amber-300">stock - reserved</code>) выполняется в строгой ACID-транзакции
+          </p>
+        </div>
+        <button
+          onclick="closeCreateOrderModal()"
+          class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Форма -->
+      <form id="create-order-form" onsubmit="submitCreateOrder(event)" class="p-6 space-y-5 max-h-[82vh] overflow-y-auto">
+        
+        <!-- Блок ошибки 409 Conflict (если не хватило остатков при отправке) -->
+        <div id="order-error-banner" class="hidden p-4 rounded-xl bg-rose-50 border-2 border-rose-400 text-rose-950 text-xs space-y-1.5"></div>
+
+        <!-- Выбор постоянного клиента (быстрый пресет) или ввод вручную -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div class="md:col-span-4">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Быстрый выбор клиента (HoReCa)
+            </label>
+            <select
+              id="client-preset-select"
+              onchange="applyClientPreset(this.value)"
+              class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+            >
+              <option value="">— Ввести вручную или выбрать сеть —</option>
+              <option value="0">Кофейня «Бодрый День» (Абая 150)</option>
+              <option value="1">Сеть «Coffee Boom» (Достык 89)</option>
+              <option value="2">Пекарня «Хлеб и Кофе» (Сатпаева 22)</option>
+              <option value="3">Бар «Сироп & Лёд» (Гоголя 75)</option>
+              <option value="4">Точка «TakeAway Express» (Розыбакиева 247)</option>
+            </select>
+          </div>
+
+          <div class="md:col-span-4">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Название клиента / Юрлицо *
+            </label>
+            <input
+              id="order-client-name"
+              type="text"
+              required
+              minlength="2"
+              placeholder="Напр.: ИП Кофейня Бодрый День"
+              class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+            />
+          </div>
+
+          <div class="md:col-span-4">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Телефон контактного лица *
+            </label>
+            <input
+              id="order-client-phone"
+              type="text"
+              required
+              placeholder="+7 701 123 45 67"
+              class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-900"
+            />
+          </div>
+
+          <div class="md:col-span-6">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Точный адрес доставки *
+            </label>
+            <input
+              id="order-delivery-address"
+              type="text"
+              required
+              placeholder="Улица, дом, вход, ориентир для водителя..."
+              class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+            />
+          </div>
+
+          <div class="md:col-span-3">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Способ оплаты *
+            </label>
+            <select
+              id="order-payment-method"
+              class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
+            >
+              <option value="cashless">Безналичный (Счет / Kaspi Pay)</option>
+              <option value="cash">Наличными экспедитору</option>
+            </select>
+          </div>
+
+          <div class="md:col-span-3">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Менеджер (ID) *
+            </label>
+            <select
+              id="order-manager-id"
+              class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
+            >
+              <option value="1">#1 — Алия Смагулова (Старший менеджер)</option>
+              <option value="2">#2 — Тимур Касымов (Отдел HoReCa)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Состав заказа (динамические строки с жестким контролем остатка) -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">
+                Позиции заказа (контроль доступного остатка в реальном времени)
+              </h4>
+              <p class="text-[11px] text-slate-500">
+                Поле количества автоматически ограничено свободным остатком (<code class="font-mono">max = available_quantity</code>)
+              </p>
+            </div>
+            <button
+              type="button"
+              onclick="addOrderItemRow()"
+              class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-1.5 transition"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+              </svg>
+              Добавить товар
+            </button>
+          </div>
+
+          <div class="border border-slate-300 rounded-xl overflow-hidden">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-100 border-b border-slate-300 text-[11px] font-mono uppercase text-slate-600">
+                  <th class="py-2.5 px-3 w-[44%]">Товар (Артикул / Название)</th>
+                  <th class="py-2.5 px-3 text-center w-[14%]">Доступно</th>
+                  <th class="py-2.5 px-3 text-right w-[14%]">Цена за ед.</th>
+                  <th class="py-2.5 px-3 text-center w-[14%]">Кол-во</th>
+                  <th class="py-2.5 px-3 text-right w-[10%]">Сумма</th>
+                  <th class="py-2.5 px-2 text-center w-[4%]"></th>
+                </tr>
+              </thead>
+              <tbody id="order-items-tbody" class="divide-y divide-slate-200 text-sm bg-white"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Комментарий и Итоговая сумма -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-2 border-t border-slate-200">
+          <div class="flex-1">
+            <input
+              id="order-comment"
+              type="text"
+              placeholder="Комментарий к сборке или доставке (например: позвонить за 30 мин, нужна сдача)..."
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+            />
+          </div>
+          <div class="flex items-center gap-6 justify-end">
+            <div class="text-right">
+              <div class="text-[11px] uppercase font-mono text-slate-500">Итого к оплате:</div>
+              <div id="order-modal-total" class="text-xl font-bold font-mono text-slate-900">0 ₸</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                onclick="closeCreateOrderModal()"
+                class="px-4 py-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs sm:text-sm"
+              >
+                Отмена
+              </button>
+              <button
+                id="submit-order-btn"
+                type="submit"
+                class="px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold text-xs sm:text-sm transition shadow-sm"
+              >
+                Подтвердить и зарезервировать
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- МОДАЛЬНОЕ ОКНО: ПОДТВЕРЖДЕНИЕ ДОСТАВКИ ВОДИТЕЛЕМ (/delivered)          -->
+  <!-- ====================================================================== -->
+  <div
+    id="modal-deliver-order"
+    class="fixed inset-0 z-50 hidden bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center p-4"
+  >
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-300 overflow-hidden">
+      <div class="bg-emerald-900 text-white px-5 py-4 flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold">Подтверждение доставки и списание со склада</h3>
+          <p id="deliver-modal-subtitle" class="text-xs text-emerald-200 font-mono mt-0.5">Заказ #0</p>
+        </div>
+        <button onclick="closeDeliverModal()" class="text-emerald-200 hover:text-white">✕</button>
+      </div>
+      <form id="deliver-order-form" onsubmit="submitDeliverOrder(event)" class="p-5 space-y-4 text-sm">
+        <input type="hidden" id="deliver-order-id" />
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Водитель-экспедитор *</label>
+          <select id="deliver-driver-id" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <option value="4">#4 — Ерлан Жумабаев (Газель Next A 452 KZ)</option>
+            <option value="5">#5 — Руслан Оспанов (Hyundai Porter B 891 KZ)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Фактический способ оплаты *</label>
+          <select id="deliver-payment-method" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <option value="cashless">Безналичный расчет (Оплачено по счету)</option>
+            <option value="cash">Наличные получены водителем</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Путь / URL фото подписанной накладной *</label>
+          <input
+            id="deliver-waybill-url"
+            type="text"
+            required
+            value="uploads/waybills/waybill_signed.jpg"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono"
+          />
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeDeliverModal()" class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold">
+            Отмена
+          </button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
+            Завершить доставку и списать остатки
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ВСПЛЫВАЮЩИЕ УВЕДОМЛЕНИЯ (TOASTS) -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- ====================================================================== -->
+  <!-- ЛОГИКА ПРИЛОЖЕНИЯ (VANILLA JS + REST API + DEMO FALLBACK)              -->
+  <!-- ====================================================================== -->
+  <script>
+    // Предустановленные клиенты HoReCa для быстрого выбора в модальном окне
+    const CLIENT_PRESETS = [
+      { name: 'ИП Кофейня «Бодрый День»', phone: '+7 701 234 56 78', address: 'г. Алматы, пр. Абая 150, вход со двора', payment: 'cashless' },
+      { name: 'ТОО «Coffee Boom Восток»', phone: '+7 702 888 11 22', address: 'г. Алматы, пр. Достык 89, служебный вход', payment: 'cashless' },
+      { name: 'Пекарня «Хлеб и Кофе»', phone: '+7 707 555 43 21', address: 'г. Алматы, ул. Сатпаева 22, 1 этаж', payment: 'cash' },
+      { name: 'Бар «Сироп & Лёд»', phone: '+7 747 900 10 20', address: 'г. Алматы, ул. Гоголя 75, угол Фурманова', payment: 'cashless' },
+      { name: 'TakeAway Express #4', phone: '+7 705 111 99 00', address: 'г. Алматы, ул. Розыбакиева 247, ТРЦ Mega, киоск 12', payment: 'cash' },
+    ];
+
+    // Демо-данные (используются автоматически, если PostgreSQL не запущена, либо по кнопке переключения)
+    const INITIAL_DEMO_PRODUCTS = [
+      { id: 1, sku: 'CUP-250-KRFT', name: 'Стакан бумажный двухслойный Крафт 250 мл (500 шт/кор)', unit: 'box', price: 14500, stock_quantity: 48, reserved_quantity: 8 },
+      { id: 2, sku: 'CUP-350-BLK',  name: 'Стакан бумажный двухслойный Черный 350 мл (500 шт/кор)', unit: 'box', price: 16800, stock_quantity: 12, reserved_quantity: 5 },
+      { id: 3, sku: 'LID-80-BLK',   name: 'Крышка пластиковая с питейником Ø80 мм черная (1000 шт/кор)', unit: 'box', price: 9200, stock_quantity: 9, reserved_quantity: 3 },
+      { id: 4, sku: 'LID-90-WHT',   name: 'Крышка пластиковая с клапаном Ø90 мм белая (1000 шт/кор)', unit: 'box', price: 10400, stock_quantity: 6, reserved_quantity: 6 },
+      { id: 5, sku: 'SYR-MON-VAN',  name: 'Сироп MONIN Ваниль 1000 мл стекло (6 бут/кор)', unit: 'box', price: 24600, stock_quantity: 25, reserved_quantity: 3 },
+      { id: 6, sku: 'SYR-MON-CAR',  name: 'Сироп MONIN Соленая Карамель 1000 мл (6 бут/кор)', unit: 'box', price: 24600, stock_quantity: 7, reserved_quantity: 2 },
+      { id: 7, sku: 'SYR-BAR-COC',  name: 'Сироп Barinoff Кокос 1000 мл ПЭТ (6 бут/кор)', unit: 'box', price: 13800, stock_quantity: 0, reserved_quantity: 0 },
+      { id: 8, sku: 'STR-210-BLK',  name: 'Трубочка коктейльная черная в инд. упаковке (4000 шт/кор)', unit: 'box', price: 11000, stock_quantity: 19, reserved_quantity: 1 },
+      { id: 9, sku: 'HLDR-2CUP',    name: 'Держатель-подставка на 2 стакана пульперкартон (300 шт/кор)', unit: 'box', price: 8900, stock_quantity: 5, reserved_quantity: 1 },
+    ];
+
+    const INITIAL_DEMO_ORDERS = [
+      {
+        id: 1041,
+        client_name: 'ИП Кофейня «Бодрый День»',
+        client_phone: '+7 701 234 56 78',
+        delivery_address: 'пр. Абая 150, вход со двора',
+        status: 'new',
+        payment_method: 'cashless',
+        payment_status: 'pending',
+        total_amount: 112600,
+        manager_id: 1,
+        driver_id: null,
+        comment: 'Доставить до 15:00, позвонить бариста',
+        created_at: new Date(Date.now() - 45 * 60000).toISOString(),
+        items: [
+          { id: 1, product_id: 1, quantity: 4, unit_price: 14500 },
+          { id: 2, product_id: 5, quantity: 2, unit_price: 24600 },
+        ]
+      },
+      {
+        id: 1040,
+        client_name: 'ТОО «Coffee Boom Восток»',
+        client_phone: '+7 702 888 11 22',
+        delivery_address: 'пр. Достык 89, служебный вход',
+        status: 'assembling',
+        payment_method: 'cashless',
+        payment_status: 'paid',
+        total_amount: 111600,
+        manager_id: 1,
+        driver_id: 4,
+        comment: 'Срочная отгрузка, паллета #2',
+        created_at: new Date(Date.now() - 130 * 60000).toISOString(),
+        items: [
+          { id: 3, product_id: 2, quantity: 5, unit_price: 16800 },
+          { id: 4, product_id: 3, quantity: 3, unit_price: 9200 },
+        ]
+      },
+      {
+        id: 1039,
+        client_name: 'Пекарня «Хлеб и Кофе»',
+        client_phone: '+7 707 555 43 21',
+        delivery_address: 'ул. Сатпаева 22, 1 этаж',
+        status: 'in_transit',
+        payment_method: 'cash',
+        payment_status: 'pending',
+        total_amount: 92500,
+        manager_id: 2,
+        driver_id: 4,
+        comment: 'Наличные забрать у администратора',
+        created_at: new Date(Date.now() - 210 * 60000).toISOString(),
+        items: [
+          { id: 5, product_id: 1, quantity: 4, unit_price: 14500 },
+          { id: 6, product_id: 6, quantity: 1, unit_price: 24600 },
+          { id: 7, product_id: 9, quantity: 1, unit_price: 8900 },
+        ]
+      },
+      {
+        id: 1038,
+        client_name: 'Бар «Сироп & Лёд»',
+        client_phone: '+7 747 900 10 20',
+        delivery_address: 'ул. Гоголя 75, угол Фурманова',
+        status: 'delivered',
+        payment_method: 'cashless',
+        payment_status: 'paid',
+        total_amount: 73800,
+        manager_id: 2,
+        driver_id: 5,
+        comment: 'Принято по накладной',
+        created_at: new Date(Date.now() - 420 * 60000).toISOString(),
+        delivery: {
+          driver_id: 5,
+          waybill_photo_url: 'uploads/waybills/order_1038_signed.jpg',
+          delivered_at: new Date(Date.now() - 300 * 60000).toISOString()
+        },
+        items: [
+          { id: 8, product_id: 5, quantity: 3, unit_price: 24600 },
+        ]
+      }
+    ];
+
+    // Глобальное состояние
+    let state = {
+      activeTab: 'kanban',
+      mode: 'api', // 'api' или 'demo'
+      products: [],
+      orders: [],
+      draggedOrderId: null,
+    };
+
+    // Форматирование валюты
+    function formatMoney(val) {
+      const num = Number(val || 0);
+      return num.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸';
+    }
+
+    // Человекочитаемые единицы измерения
+    const UNIT_LABELS = { box: 'кор.', pcs: 'шт.', pack: 'уп.', bottle: 'бут.' };
+    const STATUS_LABELS = {
+      new: 'Новый',
+      assembling: 'На сборке',
+      ready_for_shipment: 'Готов к отгрузке',
+      in_transit: 'В пути',
+      delivered: 'Доставлен',
+      canceled: 'Отменен',
+    };
+
+    // Всплывающие уведомления
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const colors = {
+        success: 'bg-emerald-900 text-white border-emerald-500',
+        error: 'bg-rose-900 text-white border-rose-500',
+        info: 'bg-slate-900 text-white border-amber-400',
+      };
+      const el = document.createElement('div');
+      el.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-lg border-l-4 text-xs font-medium flex items-start justify-between gap-3 transition-all ${colors[type] || colors.info}`;
+      el.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="opacity-70 hover:opacity-100">✕</button>`;
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 4500);
+    }
+
+    // Переключение вкладок (Канбан / Остатки)
+    function switchTab(tab) {
+      state.activeTab = tab;
+      const isKanban = tab === 'kanban';
+
+      document.getElementById('view-kanban').classList.toggle('hidden', !isKanban);
+      document.getElementById('view-inventory').classList.toggle('hidden', isKanban);
+
+      const btnKanban = document.getElementById('tab-btn-kanban');
+      const btnInv = document.getElementById('tab-btn-inventory');
+
+      if (isKanban) {
+        btnKanban.className = 'px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition flex items-center gap-2 bg-white text-slate-900 shadow-sm';
+        btnInv.className = 'px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition flex items-center gap-2 text-slate-300 hover:text-white';
+      } else {
+        btnInv.className = 'px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition flex items-center gap-2 bg-white text-slate-900 shadow-sm';
+        btnKanban.className = 'px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition flex items-center gap-2 text-slate-300 hover:text-white';
+      }
+    }
+
+    // Индикатор подключения (API vs DEMO)
+    function updateModeIndicator() {
+      const dot = document.getElementById('api-status-dot');
+      const btn = document.getElementById('toggle-mode-btn');
+      if (state.mode === 'api') {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+        btn.textContent = 'LIVE API (PostgreSQL)';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        btn.textContent = 'DEMO SANDBOX';
+      }
+    }
+
+    async function toggleDataSourceMode() {
+      if (state.mode === 'api') {
+        enableDemoMode('Включен демонстрационный режим с тестовыми данными HoReCa');
+      } else {
+        state.mode = 'api';
+        updateModeIndicator();
+        await refreshAllData();
+      }
+    }
+
+    function enableDemoMode(reasonMsg) {
+      state.mode = 'demo';
+      if (!state.products.length) {
+        state.products = JSON.parse(JSON.stringify(INITIAL_DEMO_PRODUCTS)).map(p => ({
+          ...p,
+          available_quantity: p.stock_quantity - p.reserved_quantity
+        }));
+        state.orders = JSON.parse(JSON.stringify(INITIAL_DEMO_ORDERS));
+      }
+      updateModeIndicator();
+      renderAll();
+      if (reasonMsg) showToast(reasonMsg, 'info');
+    }
+
+    // Загрузка данных с бэкенда (/api/products и /api/orders)
+    async function refreshAllData() {
+      if (state.mode === 'demo') {
+        state.products.forEach(p => {
+          p.available_quantity = p.stock_quantity - p.reserved_quantity;
+        });
+        renderAll();
+        return;
+      }
+
+      try {
+        const [prodRes, ordRes] = await Promise.all([
+          fetch('/api/products'),
+          fetch('/api/orders?limit=150')
+        ]);
+
+        if (!prodRes.ok || !ordRes.ok) {
+          throw new Error(`HTTP ${prodRes.status}`);
+        }
+
+        state.products = await prodRes.json();
+        state.orders = await ordRes.json();
+        updateModeIndicator();
+        renderAll();
+      } catch (err) {
+        // Если БД еще не поднята — плавно включаем интерактивный Demo-режим
+        enableDemoMode('Бэкенд PostgreSQL недоступен — автоматически загружены демо-данные склада');
+      }
+    }
+
+    function renderAll() {
+      updateKpiBar();
+      renderKanban();
+      renderInventoryTable();
+    }
+
+    // Обновление верхней сводки KPI
+    function updateKpiBar() {
+      const activeOrders = state.orders.filter(o => ['new', 'assembling', 'ready_for_shipment', 'in_transit'].includes(o.status));
+      const activeSum = activeOrders.reduce((acc, o) => acc + Number(o.total_amount || 0), 0);
+
+      let lowCount = 0;
+      let zeroCount = 0;
+      state.products.forEach(p => {
+        const avail = p.stock_quantity - p.reserved_quantity;
+        if (avail === 0) zeroCount++;
+        else if (avail < 10) lowCount++;
+      });
+
+      document.getElementById('kpi-active-orders').textContent = activeOrders.length;
+      document.getElementById('nav-orders-count').textContent = activeOrders.length;
+      document.getElementById('kpi-active-revenue').textContent = formatMoney(activeSum);
+      document.getElementById('kpi-low-stock').textContent = `${lowCount} поз.`;
+      document.getElementById('kpi-zero-stock').textContent = `${zeroCount} поз.`;
+
+      const badge = document.getElementById('nav-low-stock-badge');
+      if (zeroCount > 0 || lowCount > 0) {
+        badge.textContent = zeroCount + lowCount;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    // ========================================================================
+    // 1. РЕНДЕР КАНБАН-ДОСКИ И УПРАВЛЕНИЕ СТАТУСАМИ (PATCH / Drag-and-Drop)
+    // ========================================================================
+    function getProductInfo(productId) {
+      return state.products.find(p => p.id === Number(productId));
+    }
+
+    function renderKanban() {
+      const statuses = ['new', 'assembling', 'in_transit', 'delivered'];
+      const query = (document.getElementById('kanban-search')?.value || '').trim().toLowerCase();
+
+      statuses.forEach(st => {
+        const colBody = document.getElementById(`col-body-${st}`);
+        const colCount = document.getElementById(`col-count-${st}`);
+        colBody.innerHTML = '';
+
+        const filtered = state.orders.filter(o => {
+          const matchesColumn = st === 'assembling'
+            ? (o.status === 'assembling' || o.status === 'ready_for_shipment')
+            : o.status === st;
+          if (!matchesColumn) return false;
+          if (!query) return true;
+          const matchId = String(o.id).includes(query);
+          const matchClient = (o.client_name || '').toLowerCase().includes(query);
+          const matchAddr = (o.delivery_address || '').toLowerCase().includes(query);
+          const matchItem = (o.items || []).some(it => {
+            const p = it.product || getProductInfo(it.product_id);
+            return p && (p.name.toLowerCase().includes(query) || p.sku.toLowerCase().includes(query));
+          });
+          return matchId || matchClient || matchAddr || matchItem;
+        });
+
+        colCount.textContent = filtered.length;
+
+        if (filtered.length === 0) {
+          colBody.innerHTML = `
+            <div class="border border-dashed border-slate-300 rounded-lg p-6 text-center text-xs text-slate-400 select-none">
+              Нет заказов
+            </div>
+          `;
+          return;
+        }
+
+        filtered.forEach(order => {
+          colBody.appendChild(createOrderCardElement(order));
+        });
+      });
+    }
+
+    function createOrderCardElement(order) {
+      const card = document.createElement('article');
+      const isFinal = order.status === 'delivered' || order.status === 'canceled';
+
+      card.className = 'bg-white rounded-lg border border-slate-300 p-3 shadow-sm hover:border-slate-500 transition flex flex-col gap-2.5 cursor-grab active:cursor-grabbing';
+      card.draggable = !isFinal;
+      card.dataset.orderId = order.id;
+
+      card.addEventListener('dragstart', (e) => {
+        state.draggedOrderId = order.id;
+        card.classList.add('card-dragging');
+        e.dataTransfer.setData('text/plain', String(order.id));
+      });
+      card.addEventListener('dragend', () => {
+        state.draggedOrderId = null;
+        card.classList.remove('card-dragging');
+      });
+
+      // Формируем список позиций заказа
+      const itemsHtml = (order.items || []).map(item => {
+        const prod = item.product || getProductInfo(item.product_id);
+        const title = prod ? prod.name : `Товар #${item.product_id}`;
+        const sku = prod ? prod.sku : `ID:${item.product_id}`;
+        const unit = prod ? (UNIT_LABELS[prod.unit] || prod.unit) : 'кор.';
+        return `
+          <li class="flex items-start justify-between gap-2 text-xs py-1 border-b border-slate-100 last:border-0">
+            <div class="min-w-0">
+              <span class="font-mono text-[10px] px-1 py-0.2 bg-slate-100 text-slate-700 rounded">${sku}</span>
+              <span class="text-slate-700 font-medium break-words ml-1">${title}</span>
+            </div>
+            <span class="font-mono font-bold text-slate-900 whitespace-nowrap">${item.quantity} ${unit}</span>
+          </li>
+        `;
+      }).join('');
+
+      // Кнопки быстрых действий по статусу
+      let actionsHtml = '';
+      if (order.status === 'new') {
+        actionsHtml = `
+          <button onclick="changeOrderStatus(${order.id}, 'assembling')" class="flex-1 py-1.5 px-2.5 rounded bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition">
+            В сборку →
+          </button>
+          <button onclick="changeOrderStatus(${order.id}, 'canceled')" class="py-1.5 px-2 rounded border border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold text-xs transition" title="Отменить и вернуть резерв">
+            Отмена
+          </button>
+        `;
+      } else if (order.status === 'assembling' || order.status === 'ready_for_shipment') {
+        const readyBadge = order.status === 'ready_for_shipment'
+          ? '<div class="w-full mb-1.5 px-2 py-1 rounded bg-emerald-100 border border-emerald-300 text-emerald-900 font-mono text-[11px] font-bold text-center">📦 СОБРАНО СКЛАДОМ (Готов к отгрузке)</div>'
+          : '';
+        actionsHtml = `
+          <div class="w-full flex flex-col">
+            ${readyBadge}
+            <div class="flex items-center gap-1.5">
+              <button onclick="changeOrderStatus(${order.id}, 'in_transit')" class="flex-1 py-1.5 px-2.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition">
+                Передать водителю →
+              </button>
+              <button onclick="changeOrderStatus(${order.id}, 'canceled')" class="py-1.5 px-2 rounded border border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold text-xs transition" title="Отменить и вернуть резерв">
+                Отмена
+              </button>
+            </div>
+          </div>
+        `;
+      } else if (order.status === 'in_transit') {
+        actionsHtml = `
+          <button onclick="openDeliverModal(${order.id})" class="flex-1 py-1.5 px-2.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition">
+            ✓ Подтвердить доставку
+          </button>
+          <button onclick="changeOrderStatus(${order.id}, 'canceled')" class="py-1.5 px-2 rounded border border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold text-xs transition" title="Отменить и вернуть резерв">
+            Возврат
+          </button>
+        `;
+      } else if (order.status === 'delivered') {
+        const photoUrl = order.delivery?.waybill_photo_url || 'накладная загружена';
+        actionsHtml = `
+          <div class="w-full text-[11px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 flex items-center justify-between">
+            <span>✓ Остаток списан</span>
+            <span class="truncate max-w-[140px]" title="${photoUrl}">📷 Накладная</span>
+          </div>
+        `;
+      }
+
+      const paymentBadge = order.payment_method === 'cash'
+        ? '<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-mono text-[10px] font-semibold">НАЛ</span>'
+        : '<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] font-semibold">БЕЗНАЛ</span>';
+
+      card.innerHTML = `
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5">
+            <span class="font-mono font-bold text-xs px-1.5 py-0.5 rounded bg-slate-900 text-amber-400">#${order.id}</span>
+            ${paymentBadge}
+          </div>
+          <span class="font-mono font-bold text-sm text-slate-900">${formatMoney(order.total_amount)}</span>
+        </div>
+
+        <div>
+          <div class="font-bold text-sm text-slate-900 leading-snug">${order.client_name}</div>
+          <div class="text-xs text-slate-500 font-mono mt-0.5">${order.client_phone}</div>
+        </div>
+
+        <div class="text-xs text-slate-700 bg-slate-50 border border-slate-200/80 rounded p-2 flex items-start gap-1.5">
+          <svg class="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span class="leading-tight">${order.delivery_address}</span>
+        </div>
+
+        <div class="border-t border-slate-200 pt-2">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1">
+            Состав заказа (${(order.items || []).length} поз.):
+          </div>
+          <ul class="max-h-32 overflow-y-auto pr-1">${itemsHtml}</ul>
+        </div>
+
+        ${order.comment ? `<div class="text-[11px] text-amber-900 bg-amber-50/80 border border-amber-200 rounded px-2 py-1">💬 ${order.comment}</div>` : ''}
+
+        <div class="flex items-center gap-1.5 pt-1 mt-auto">
+          ${actionsHtml}
+        </div>
+      `;
+
+      return card;
+    }
+
+    // Drag and Drop обработчики колонок
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.currentTarget.classList.add('kanban-col-dragover');
+    }
+
+    function handleDragLeave(e) {
+      e.currentTarget.classList.remove('kanban-col-dragover');
+    }
+
+    function handleDrop(e, targetStatus) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('kanban-col-dragover');
+      const orderId = Number(e.dataTransfer.getData('text/plain') || state.draggedOrderId);
+      if (!orderId) return;
+
+      const order = state.orders.find(o => o.id === orderId);
+      if (!order || order.status === targetStatus) return;
+
+      if (targetStatus === 'delivered') {
+        openDeliverModal(orderId);
+      } else {
+        changeOrderStatus(orderId, targetStatus);
+      }
+    }
+
+    // Отправка PATCH /api/orders/{id}/status
+    async function changeOrderStatus(orderId, newStatus) {
+      const order = state.orders.find(o => o.id === Number(orderId));
+      if (!order) return;
+
+      // Для статуса in_transit требуется водитель (по умолчанию назначаем #4, если не был указан)
+      const driverId = newStatus === 'in_transit' ? (order.driver_id || 4) : order.driver_id;
+
+      if (state.mode === 'api') {
+        try {
+          const res = await fetch(`/api/orders/${orderId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus, driver_id: driverId }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            showToast(data.message || 'Ошибка смены статуса', 'error');
+            return;
+          }
+          await refreshAllData();
+          showToast(`Заказ #${orderId} переведен в статус «${STATUS_LABELS[newStatus]}»`, 'success');
+        } catch (err) {
+          showToast('Ошибка соединения с сервером', 'error');
+        }
+      } else {
+        // Локальная транзакция в Demo-режиме
+        if (order.status === 'delivered' || order.status === 'canceled') {
+          showToast(`Заказ #${orderId} уже находится в финальном статусе`, 'error');
+          return;
+        }
+        if (newStatus === 'canceled') {
+          (order.items || []).forEach(it => {
+            const p = getProductInfo(it.product_id);
+            if (p) p.reserved_quantity = Math.max(0, p.reserved_quantity - it.quantity);
+          });
+        }
+        order.status = newStatus;
+        if (driverId) order.driver_id = driverId;
+        refreshAllData();
+        showToast(`Заказ #${orderId} → «${STATUS_LABELS[newStatus]}»`, 'success');
+      }
+    }
+
+    // Модальное окно подтверждения доставки (POST /api/orders/{id}/delivered)
+    function openDeliverModal(orderId) {
+      const order = state.orders.find(o => o.id === Number(orderId));
+      if (!order) return;
+
+      document.getElementById('deliver-order-id').value = order.id;
+      document.getElementById('deliver-modal-subtitle').textContent = `Заказ #${order.id} — ${order.client_name} (${formatMoney(order.total_amount)})`;
+      document.getElementById('deliver-payment-method').value = order.payment_method || 'cashless';
+      document.getElementById('deliver-waybill-url').value = `uploads/waybills/order_${order.id}_signed.jpg`;
+      document.getElementById('modal-deliver-order').classList.remove('hidden');
+    }
+
+    function closeDeliverModal() {
+      document.getElementById('modal-deliver-order').classList.add('hidden');
+    }
+
+    async function submitDeliverOrder(e) {
+      e.preventDefault();
+      const orderId = Number(document.getElementById('deliver-order-id').value);
+      const driverId = Number(document.getElementById('deliver-driver-id').value);
+      const paymentMethod = document.getElementById('deliver-payment-method').value;
+      const waybillUrl = document.getElementById('deliver-waybill-url').value.trim();
+
+      const payload = {
+        driver_id: driverId,
+        payment_method: paymentMethod,
+        payment_status: 'paid',
+        waybill_photo_url: waybillUrl,
+        latitude: 43.238949,
+        longitude: 76.889709,
+      };
+
+      if (state.mode === 'api') {
+        try {
+          const res = await fetch(`/api/orders/${orderId}/delivered`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            showToast(data.message || 'Не удалось подтвердить доставку', 'error');
+            return;
+          }
+          closeDeliverModal();
+          await refreshAllData();
+          showToast(`Заказ #${orderId} доставлен! Физический остаток и резерв списаны.`, 'success');
+        } catch (err) {
+          showToast('Ошибка сети при подтверждении доставки', 'error');
+        }
+      } else {
+        // Demo режим: уменьшаем stock_quantity и reserved_quantity
+        const order = state.orders.find(o => o.id === orderId);
+        if (order) {
+          (order.items || []).forEach(it => {
+            const p = getProductInfo(it.product_id);
+            if (p) {
+              p.stock_quantity = Math.max(0, p.stock_quantity - it.quantity);
+              p.reserved_quantity = Math.max(0, p.reserved_quantity - it.quantity);
+            }
+          });
+          order.status = 'delivered';
+          order.payment_method = paymentMethod;
+          order.payment_status = 'paid';
+          order.driver_id = driverId;
+          order.delivery = {
+            driver_id: driverId,
+            waybill_photo_url: waybillUrl,
+            delivered_at: new Date().toISOString(),
+          };
+        }
+        closeDeliverModal();
+        refreshAllData();
+        showToast(`Заказ #${orderId} доставлен! Остатки (stock и reserved) уменьшены.`, 'success');
+      }
+    }
+
+    // ========================================================================
+    // 2. РЕНДЕР ТАБЛИЦЫ ОСТАТКОВ ТОВАРОВ (Красная = 0, Желтая < 10)
+    // ========================================================================
+    function renderInventoryTable() {
+      const tbody = document.getElementById('inventory-tbody');
+      const query = (document.getElementById('inventory-search')?.value || '').trim().toLowerCase();
+      const stockFilter = document.getElementById('inventory-stock-filter')?.value || 'all';
+
+      tbody.innerHTML = '';
+
+      const filtered = state.products.filter(p => {
+        const avail = p.stock_quantity - p.reserved_quantity;
+        const matchQuery = !query || p.name.toLowerCase().includes(query) || p.sku.toLowerCase().includes(query);
+        if (!matchQuery) return false;
+        if (stockFilter === 'critical') return avail === 0;
+        if (stockFilter === 'low') return avail > 0 && avail < 10;
+        if (stockFilter === 'ok') return avail >= 10;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="9" class="py-10 text-center text-slate-400 text-sm">
+              По вашему запросу товары не найдены
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      filtered.forEach(p => {
+        const avail = p.stock_quantity - p.reserved_quantity;
+        const unitLabel = UNIT_LABELS[p.unit] || p.unit;
+
+        // Цветовая индикация строки согласно бизнес-требованиям:
+        // 0 -> красная подсветка, < 10 -> желтая подсветка
+        let rowClass = 'hover:bg-slate-50 transition';
+        let statusBadge = '';
+
+        if (avail <= 0) {
+          rowClass = 'bg-rose-100/90 hover:bg-rose-200/70 text-rose-950 font-medium transition';
+          statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-rose-600 text-white">НЕТ В НАЛИЧИИ (0)</span>';
+        } else if (avail < 10) {
+          rowClass = 'bg-amber-100/85 hover:bg-amber-200/70 text-amber-950 font-medium transition';
+          statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-amber-500 text-slate-950">МАЛО (${avail} ${unitLabel})</span>`;
+        } else {
+          statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-100 text-emerald-900">В НАЛИЧИИ</span>';
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = rowClass;
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-mono text-xs font-bold">${p.sku}</td>
+          <td class="py-3 px-4">${p.name}</td>
+          <td class="py-3 px-3 text-center font-mono text-xs">${unitLabel}</td>
+          <td class="py-3 px-4 text-right font-mono font-semibold">${formatMoney(p.price)}</td>
+          <td class="py-3 px-4 text-right font-mono">${p.stock_quantity}</td>
+          <td class="py-3 px-4 text-right font-mono ${p.reserved_quantity > 0 ? 'font-bold text-indigo-700' : 'text-slate-400'}">
+            ${p.reserved_quantity}
+          </td>
+          <td class="py-3 px-4 text-right font-mono text-base font-bold ${avail === 0 ? 'text-rose-700' : avail < 10 ? 'text-amber-800' : 'text-emerald-700'}">
+            ${avail}
+          </td>
+          <td class="py-3 px-4 text-center">${statusBadge}</td>
+          <td class="py-3 px-4 text-right">
+            <button
+              ${avail <= 0 ? 'disabled' : ''}
+              onclick="quickOrderProduct(${p.id})"
+              class="px-2.5 py-1 rounded text-xs font-semibold transition ${
+                avail <= 0
+                  ? 'bg-rose-200 text-rose-400 cursor-not-allowed'
+                  : 'bg-slate-900 hover:bg-slate-800 text-white'
+              }"
+            >
+              + В заказ
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Быстрое открытие модалки заказа с выбранным товаром из таблицы остатков
+    function quickOrderProduct(productId) {
+      openCreateOrderModal(productId);
+    }
+
+    // ========================================================================
+    // 3. МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ЗАКАЗА С ЖЕСТКИМ КОНТРОЛЕМ НАЛИЧИЯ
+    // ========================================================================
+    function openCreateOrderModal(preselectedProductId = null) {
+      document.getElementById('create-order-form').reset();
+      document.getElementById('order-error-banner').classList.add('hidden');
+      document.getElementById('order-items-tbody').innerHTML = '';
+
+      addOrderItemRow(preselectedProductId);
+      recalcOrderModalTotal();
+      document.getElementById('modal-create-order').classList.remove('hidden');
+    }
+
+    function closeCreateOrderModal() {
+      document.getElementById('modal-create-order').classList.add('hidden');
+    }
+
+    function applyClientPreset(indexStr) {
+      if (indexStr === '') return;
+      const preset = CLIENT_PRESETS[Number(indexStr)];
+      if (!preset) return;
+      document.getElementById('order-client-name').value = preset.name;
+      document.getElementById('order-client-phone').value = preset.phone;
+      document.getElementById('order-delivery-address').value = preset.address;
+      document.getElementById('order-payment-method').value = preset.payment;
+    }
+
+    // Вычисляет, сколько единиц товара уже выбрано в ДРУГИХ строках текущей формы
+    function getAlreadySelectedQty(productId, excludeRowEl = null) {
+      let sum = 0;
+      document.querySelectorAll('#order-items-tbody tr').forEach(row => {
+        if (row === excludeRowEl) return;
+        const sel = row.querySelector('.item-product-select');
+        const qtyInp = row.querySelector('.item-qty-input');
+        if (sel && qtyInp && Number(sel.value) === Number(productId)) {
+          sum += Number(qtyInp.value || 0);
+        }
+      });
+      return sum;
+    }
+
+    function addOrderItemRow(selectedProductId = null) {
+      const tbody = document.getElementById('order-items-tbody');
+      const availableProducts = state.products.filter(p => (p.stock_quantity - p.reserved_quantity) > 0);
+
+      if (availableProducts.length === 0) {
+        showToast('На складе нет товаров со свободным остатком > 0', 'error');
+        return;
+      }
+
+      const defaultProduct = selectedProductId
+        ? state.products.find(p => p.id === Number(selectedProductId))
+        : availableProducts[0];
+
+      const tr = document.createElement('tr');
+      tr.className = 'item-row';
+
+      const optionsHtml = state.products.map(p => {
+        const avail = p.stock_quantity - p.reserved_quantity;
+        const disabled = avail <= 0 ? 'disabled' : '';
+        const selected = defaultProduct && p.id === defaultProduct.id ? 'selected' : '';
+        return `<option value="${p.id}" ${disabled} ${selected}>
+          [${p.sku}] ${p.name} — (Доступно: ${avail} ${UNIT_LABELS[p.unit] || 'кор.'})
+        </option>`;
+      }).join('');
+
+      tr.innerHTML = `
+        <td class="py-2.5 px-3">
+          <select
+            onchange="syncOrderItemRow(this.closest('tr'))"
+            class="item-product-select w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
+          >
+            ${optionsHtml}
+          </select>
+        </td>
+        <td class="py-2.5 px-3 text-center">
+          <span class="item-avail-badge font-mono text-xs font-bold px-2 py-0.5 rounded">0</span>
+        </td>
+        <td class="py-2.5 px-3 text-right font-mono text-xs sm:text-sm item-price-cell">0 ₸</td>
+        <td class="py-2.5 px-3 text-center">
+          <input
+            type="number"
+            min="1"
+            value="1"
+            oninput="syncOrderItemRow(this.closest('tr'))"
+            class="item-qty-input w-20 text-center font-mono font-bold px-2 py-1 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+          />
+          <div class="item-limit-hint hidden text-[10px] font-mono text-rose-600 mt-0.5">Макс. лимит!</div>
+        </td>
+        <td class="py-2.5 px-3 text-right font-mono font-bold text-xs sm:text-sm item-line-total">0 ₸</td>
+        <td class="py-2.5 px-2 text-center">
+          <button
+            type="button"
+            onclick="removeOrderItemRow(this.closest('tr'))"
+            class="text-slate-400 hover:text-rose-600 p-1 rounded"
+            title="Удалить позицию"
+          >
+            ✕
+          </button>
+        </td>
+      `;
+
+      tbody.appendChild(tr);
+      syncOrderItemRow(tr);
+    }
+
+    function removeOrderItemRow(rowEl) {
+      const tbody = document.getElementById('order-items-tbody');
+      if (tbody.querySelectorAll('tr').length <= 1) {
+        showToast('В заказе должна быть хотя бы одна позиция', 'error');
+        return;
+      }
+      rowEl.remove();
+      recalcOrderModalTotal();
+    }
+
+    // Контроль ввода количества: нельзя ввести больше, чем (stock_quantity - reserved_quantity)
+    function syncOrderItemRow(rowEl) {
+      const selectEl = rowEl.querySelector('.item-product-select');
+      const qtyInput = rowEl.querySelector('.item-qty-input');
+      const availBadge = rowEl.querySelector('.item-avail-badge');
+      const priceCell = rowEl.querySelector('.item-price-cell');
+      const totalCell = rowEl.querySelector('.item-line-total');
+      const limitHint = rowEl.querySelector('.item-limit-hint');
+
+      const productId = Number(selectEl.value);
+      const product = getProductInfo(productId);
+      if (!product) return;
+
+      const totalAvail = Math.max(0, product.stock_quantity - product.reserved_quantity);
+      const takenInOtherRows = getAlreadySelectedQty(productId, rowEl);
+      const maxForThisRow = Math.max(0, totalAvail - takenInOtherRows);
+
+      qtyInput.max = String(maxForThisRow);
+
+      let currentQty = parseInt(qtyInput.value, 10);
+      if (isNaN(currentQty) || currentQty < 1) {
+        currentQty = maxForThisRow > 0 ? 1 : 0;
+      }
+
+      // ЖЕСТКИЙ КОНТРОЛЬ ОСТАТКА: автоматически подрезаем значение до maxForThisRow
+      if (currentQty > maxForThisRow) {
+        currentQty = maxForThisRow;
+        qtyInput.value = String(currentQty);
+        limitHint.textContent = `Максимум в наличии: ${maxForThisRow}`;
+        limitHint.classList.remove('hidden');
+      } else {
+        qtyInput.value = String(currentQty);
+        limitHint.classList.add('hidden');
+      }
+
+      availBadge.textContent = `${maxForThisRow} ${UNIT_LABELS[product.unit] || 'кор.'}`;
+      availBadge.className = `item-avail-badge font-mono text-xs font-bold px-2 py-0.5 rounded ${
+        maxForThisRow < 10 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+      }`;
+
+      priceCell.textContent = formatMoney(product.price);
+      totalCell.textContent = formatMoney(Number(product.price) * currentQty);
+
+      recalcOrderModalTotal();
+    }
+
+    function recalcOrderModalTotal() {
+      let grandTotal = 0;
+      document.querySelectorAll('#order-items-tbody tr').forEach(row => {
+        const selectEl = row.querySelector('.item-product-select');
+        const qtyInput = row.querySelector('.item-qty-input');
+        const product = getProductInfo(Number(selectEl.value));
+        const qty = Number(qtyInput.value || 0);
+        if (product && qty > 0) {
+          grandTotal += Number(product.price) * qty;
+        }
+      });
+      document.getElementById('order-modal-total').textContent = formatMoney(grandTotal);
+    }
+
+    // Отправка POST /api/orders
+    async function submitCreateOrder(e) {
+      e.preventDefault();
+      const errorBanner = document.getElementById('order-error-banner');
+      errorBanner.classList.add('hidden');
+
+      const items = [];
+      document.querySelectorAll('#order-items-tbody tr').forEach(row => {
+        const productId = Number(row.querySelector('.item-product-select').value);
+        const quantity = Number(row.querySelector('.item-qty-input').value);
+        if (productId && quantity > 0) {
+          items.push({ product_id: productId, quantity });
+        }
+      });
+
+      if (items.length === 0) {
+        showToast('Добавьте хотя бы один товар с количеством больше 0', 'error');
+        return;
+      }
+
+      const payload = {
+        client_name: document.getElementById('order-client-name').value.trim(),
+        client_phone: document.getElementById('order-client-phone').value.trim(),
+        delivery_address: document.getElementById('order-delivery-address').value.trim(),
+        payment_method: document.getElementById('order-payment-method').value,
+        manager_id: Number(document.getElementById('order-manager-id').value),
+        comment: document.getElementById('order-comment').value.trim() || null,
+        items,
+      };
+
+      if (state.mode === 'api') {
+        try {
+          const res = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+
+          // Обработка 409 Conflict (InsufficientStockError с дефицитными позициями)
+          if (res.status === 409 && data.shortages) {
+            const listHtml = data.shortages.map(s =>
+              `<li>• <b>${s.name} (${s.sku})</b>: запрошено ${s.requested_quantity}, доступно ${s.available_quantity} (не хватает: ${s.deficit})</li>`
+            ).join('');
+            errorBanner.innerHTML = `
+              <div class="font-bold text-rose-900">Ошибка 409 Conflict: Недостаточно свободного остатка! Транзакция отменена.</div>
+              <ul class="mt-1 space-y-0.5">${listHtml}</ul>
+            `;
+            errorBanner.classList.remove('hidden');
+            await refreshAllData();
+            return;
+          }
+
+          if (!res.ok) {
+            showToast(data.message || 'Ошибка при создании заказа', 'error');
+            return;
+          }
+
+          closeCreateOrderModal();
+          await refreshAllData();
+          showToast(`Заказ #${data.id} создан! Товары поставлены в резерв.`, 'success');
+        } catch (err) {
+          showToast('Ошибка соединения с сервером', 'error');
+        }
+      } else {
+        // Атомарная проверка в Demo-режиме
+        const reqMap = {};
+        items.forEach(i => { reqMap[i.product_id] = (reqMap[i.product_id] || 0) + i.quantity; });
+
+        const shortages = [];
+        Object.entries(reqMap).forEach(([pid, reqQty]) => {
+          const p = getProductInfo(Number(pid));
+          const avail = p ? (p.stock_quantity - p.reserved_quantity) : 0;
+          if (!p || avail < reqQty) {
+            shortages.push({
+              sku: p?.sku || pid,
+              name: p?.name || `ID ${pid}`,
+              requested_quantity: reqQty,
+              available_quantity: avail,
+              deficit: reqQty - avail,
+            });
+          }
+        });
+
+        if (shortages.length > 0) {
+          errorBanner.innerHTML = `
+            <div class="font-bold text-rose-900">Ошибка 409 Conflict: Недостаточно остатка на складе!</div>
+            <ul class="mt-1 space-y-0.5">${shortages.map(s => `<li>• ${s.name}: запрошено ${s.requested_quantity}, доступно ${s.available_quantity}</li>`).join('')}</ul>
+          `;
+          errorBanner.classList.remove('hidden');
+          return;
+        }
+
+        let totalAmount = 0;
+        const orderItems = [];
+        Object.entries(reqMap).forEach(([pid, qty], idx) => {
+          const p = getProductInfo(Number(pid));
+          p.reserved_quantity += qty;
+          totalAmount += Number(p.price) * qty;
+          orderItems.push({ id: Date.now() + idx, product_id: p.id, quantity: qty, unit_price: p.price });
+        });
+
+        const newId = Math.max(1000, ...state.orders.map(o => o.id)) + 1;
+        state.orders.unshift({
+          id: newId,
+          client_name: payload.client_name,
+          client_phone: payload.client_phone,
+          delivery_address: payload.delivery_address,
+          status: 'new',
+          payment_method: payload.payment_method,
+          payment_status: 'pending',
+          total_amount: totalAmount,
+          manager_id: payload.manager_id,
+          driver_id: null,
+          comment: payload.comment,
+          created_at: new Date().toISOString(),
+          items: orderItems,
+        });
+
+        closeCreateOrderModal();
+        refreshAllData();
+        showToast(`Заказ #${newId} создан! Остаток зарезервирован.`, 'success');
+      }
+    }
+
+    // Горячие клавиши для быстрой работы менеджера на десктопе (N — новый заказ, R — обновить, Esc — закрыть модалку)
+    document.addEventListener('keydown', (e) => {
+      const tag = document.activeElement?.tagName;
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+      if (e.key === 'Escape') {
+        closeCreateOrderModal();
+        closeDeliverModal();
+      } else if (!inInput && (e.key === 'n' || e.key === 'N' || e.key === 'т' || e.key === 'Т')) {
+        e.preventDefault();
+        openCreateOrderModal();
+      } else if (!inInput && (e.key === 'r' || e.key === 'R' || e.key === 'к' || e.key === 'К')) {
+        e.preventDefault();
+        refreshAllData();
+        showToast('Данные обновлены', 'info');
+      }
+    });
+
+    // Инициализация при загрузке страницы
+    window.addEventListener('DOMContentLoaded', () => {
+      refreshAllData();
+    });
+  </script>
+</body>
+</html>
+

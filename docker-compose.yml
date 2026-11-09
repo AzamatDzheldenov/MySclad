@@ -1,0 +1,113 @@
+services:
+  # ==========================================================================
+  # 1. База данных PostgreSQL 16 (с персистентным volume и авто-инициализацией)
+  # ==========================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: moysklad_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-moysklad}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./sql/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-moysklad}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - moysklad_net
+
+  # ==========================================================================
+  # 2. Backend-приложение (FastAPI + SQLAlchemy 2.0 Async + asyncpg)
+  # ==========================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: moysklad_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-moysklad}
+      WAYBILL_UPLOAD_DIR: /app/uploads/waybills
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      API_BASE_URL: http://backend:8000/api
+    volumes:
+      - waybills_data:/app/uploads
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - moysklad_net
+
+  # ==========================================================================
+  # 3. Telegram-бот для водителей и кладовщиков (aiogram 3.x)
+  # ==========================================================================
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: moysklad_bot
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      TELEGRAM_BOT_TOKEN: 9219462769:AAGCpToOCsa-gM9TTxYASY7WTlDFy7ux3eg
+      API_BASE_URL: http://backend:8000/api
+    command: >
+      sh -c 'if [ -z "$$TELEGRAM_BOT_TOKEN" ]; then
+        echo "[WARN] TELEGRAM_BOT_TOKEN не задан в .env — контейнер бота ожидает настройки токена...";
+        tail -f /dev/null;
+      else
+        exec python3 -m app.bot.telegram_bot;
+      fi'
+    networks:
+      - moysklad_net
+
+  # ==========================================================================
+  # 4. Nginx Reverse Proxy (раздача статики фронтенда и проксирование /api)
+  # ==========================================================================
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: moysklad_nginx
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend:/usr/share/nginx/html:ro
+      - waybills_data:/var/www/uploads:ro
+    networks:
+      - moysklad_net
+
+volumes:
+  postgres_data:
+    name: moysklad_postgres_data
+  waybills_data:
+    name: moysklad_waybills_data
+
+networks:
+  moysklad_net:
+    name: moysklad_network
+    driver: bridge
